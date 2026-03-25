@@ -1,7 +1,5 @@
 package com.frankenkitten42.claudewidget.ui
 
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -18,8 +16,7 @@ import okhttp3.OkHttpClient
 /**
  * Entry point for the app. Handles:
  * - Showing sign-in button when not authenticated
- * - Launching the Chrome Custom Tab OAuth flow
- * - Receiving the OAuth callback redirect
+ * - Launching the OAuth flow (Chrome Custom Tab + loopback server)
  * - Triggering the first widget update after sign-in
  */
 class AuthActivity : AppCompatActivity() {
@@ -38,8 +35,8 @@ class AuthActivity : AppCompatActivity() {
         tokenStore = TokenStore(this)
         oauthManager = OAuthManager(this, tokenStore, httpClient)
 
-        statusText   = findViewById(R.id.tv_status)
-        signInButton = findViewById(R.id.btn_sign_in)
+        statusText    = findViewById(R.id.tv_status)
+        signInButton  = findViewById(R.id.btn_sign_in)
         signOutButton = findViewById(R.id.btn_sign_out)
 
         signInButton.setOnClickListener {
@@ -51,49 +48,29 @@ class AuthActivity : AppCompatActivity() {
             updateUi()
         }
 
-        // Handle OAuth callback if launched via redirect URI
-        handleOAuthCallbackIfPresent(intent)
-
         updateUi()
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleOAuthCallbackIfPresent(intent)
-    }
-
-    private fun handleOAuthCallbackIfPresent(intent: Intent) {
-        val uri = intent.data ?: return
-        if (uri.scheme != "claude-widget" || uri.host != "oauth") return
-
-        setStatus("Completing sign-in…")
-        lifecycleScope.launch {
-            val result = oauthManager.handleCallback(uri)
-            if (result.isSuccess) {
-                setStatus("Signed in successfully!")
-                // Schedule periodic updates and do an immediate fetch
-                UsageFetchWorker.schedule(this@AuthActivity)
-                UsageFetchWorker::class.java.also {
-                    androidx.work.OneTimeWorkRequestBuilder<UsageFetchWorker>()
-                        .build()
-                        .also { req ->
-                            androidx.work.WorkManager.getInstance(this@AuthActivity).enqueue(req)
-                        }
-                }
-            } else {
-                setStatus("Sign-in failed: ${result.exceptionOrNull()?.message}")
-            }
-            updateUi()
-        }
     }
 
     private suspend fun startOAuthFlow() {
         setStatus("Opening Claude sign-in…")
-        try {
-            oauthManager.launchAuthFlow()
-        } catch (e: Exception) {
-            setStatus("Error: ${e.message}")
+        signInButton.isEnabled = false
+
+        val result = oauthManager.launchAuthFlow()
+
+        if (result.isSuccess) {
+            setStatus("Signed in successfully!")
+            UsageFetchWorker.schedule(this)
+            androidx.work.OneTimeWorkRequestBuilder<UsageFetchWorker>()
+                .build()
+                .also { req ->
+                    androidx.work.WorkManager.getInstance(this).enqueue(req)
+                }
+        } else {
+            setStatus("Sign-in failed: ${result.exceptionOrNull()?.message}")
         }
+
+        signInButton.isEnabled = true
+        updateUi()
     }
 
     private fun updateUi() {

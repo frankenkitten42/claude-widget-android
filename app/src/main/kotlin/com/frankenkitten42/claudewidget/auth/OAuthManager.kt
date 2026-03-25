@@ -9,6 +9,9 @@ import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.ServerSocket
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
@@ -16,13 +19,17 @@ import java.util.Base64
 /**
  * Handles the full OAuth 2.0 + PKCE flow for Claude authentication.
  *
+ * Uses RFC 8252 loopback redirect: starts a temporary local HTTP server on a
+ * random OS-assigned port, then redirects the browser there after auth.
+ * This matches exactly how the Claude Code CLI handles authentication.
+ *
  * Flow:
- * 1. Fetch client_id from Claude's metadata endpoint
- * 2. Generate PKCE pair + state nonce
+ * 1. Generate PKCE pair + state nonce
+ * 2. Start local HTTP server on random port
  * 3. Open Chrome Custom Tab → claude.ai/oauth/authorize
- * 4. Receive callback at claude-widget://oauth/callback
- * 5. Validate state, exchange code for tokens
- * 6. Store tokens in TokenStore (Android Keystore)
+ * 4. User authenticates; browser redirects to http://127.0.0.1:PORT/?code=...
+ * 5. Local server captures code, validates state, sends success page
+ * 6. Exchange code for tokens, store in Android Keystore
  */
 class OAuthManager(
     private val context: Context,
@@ -30,44 +37,26 @@ class OAuthManager(
     private val httpClient: OkHttpClient
 ) {
 
-    // In-memory PKCE state — only valid for the duration of one auth attempt
-    private var pendingCodeVerifier: String? = null
-    private var pendingState: String? = null
-
-    // -----------------------------------------------------------------------
-    // Step 1 — Fetch client metadata to get client_id
-    // -----------------------------------------------------------------------
-    suspend fun fetchClientId(): String {
-        val request = Request.Builder()
-            .url(METADATA_URL)
-            .header("anthropic-beta", OAUTH_BETA)
-            .build()
-        val body = withContext(Dispatchers.IO) {
-            httpClient.newCall(request).execute().use { response ->
-                check(response.isSuccessful) { "Metadata fetch failed: ${response.code}" }
-                response.body!!.string()
-            }
-        }
-        return JSONObject(body).getString("client_id")
-    }
-
-    // -----------------------------------------------------------------------
-    // Step 2+3 — Build auth URL and open Chrome Custom Tab
-    // -----------------------------------------------------------------------
-    suspend fun launchAuthFlow() {
-        val clientId = fetchClientId()
-
+    /**
+     * Launches the full OAuth flow and returns when it completes (success or failure).
+     * Opens Chrome Custom Tab — the coroutine suspends until the browser callback arrives
+     * or the 5-minute server timeout expires.
+     */
+    suspend fun launchAuthFlow(): Result<Unit> {
         val codeVerifier = generateCodeVerifier()
         val codeChallenge = generateCodeChallenge(codeVerifier)
         val state = generateState()
 
-        // Store for validation when callback arrives
-        pendingCodeVerifier = codeVerifier
-        pendingState = state
+        // OS assigns a random available port (port 0 → OS picks)
+        val serverSocket = withContext(Dispatchers.IO) {
+            ServerSocket(0).also { it.soTimeout = 300_000 } // 5 min timeout
+        }
+        val port = serverSocket.localPort
+        val redirectUri = "http://127.0.0.1:$port"
 
         val authUri = Uri.parse(AUTH_URL).buildUpon()
-            .appendQueryParameter("client_id", clientId)
-            .appendQueryParameter("redirect_uri", REDIRECT_URI)
+            .appendQueryParameter("client_id", CLIENT_ID)
+            .appendQueryParameter("redirect_uri", redirectUri)
             .appendQueryParameter("response_type", "code")
             .appendQueryParameter("scope", SCOPES)
             .appendQueryParameter("code_challenge", codeChallenge)
@@ -75,43 +64,62 @@ class OAuthManager(
             .appendQueryParameter("state", state)
             .build()
 
-        CustomTabsIntent.Builder()
-            .setShowTitle(true)
-            .build()
-            .launchUrl(context, authUri)
-    }
-
-    // -----------------------------------------------------------------------
-    // Step 4+5 — Handle the redirect callback
-    // -----------------------------------------------------------------------
-    suspend fun handleCallback(callbackUri: Uri): Result<Unit> {
-        val code = callbackUri.getQueryParameter("code")
-            ?: return Result.failure(Exception("No auth code in callback"))
-
-        val returnedState = callbackUri.getQueryParameter("state")
-        if (returnedState != pendingState) {
-            pendingCodeVerifier = null
-            pendingState = null
-            return Result.failure(Exception("State mismatch — possible CSRF attack"))
+        // Chrome Custom Tab must be launched from the main thread
+        withContext(Dispatchers.Main) {
+            CustomTabsIntent.Builder().setShowTitle(true).build()
+                .launchUrl(context, authUri)
         }
 
-        val verifier = pendingCodeVerifier
-            ?: return Result.failure(Exception("No pending code verifier"))
+        // Suspend on IO thread waiting for browser to redirect to our local server
+        val (code, returnedState) = withContext(Dispatchers.IO) {
+            try {
+                val socket = serverSocket.accept()
+                val requestLine = BufferedReader(InputStreamReader(socket.getInputStream())).readLine()
+                    ?: return@withContext Pair<String?, String?>(null, null)
 
-        return exchangeCodeForTokens(code, verifier)
+                // requestLine: "GET /?code=XXX&state=YYY HTTP/1.1"
+                val path = requestLine.split(" ").getOrNull(1)
+                    ?: return@withContext Pair<String?, String?>(null, null)
+                val callbackUri = Uri.parse("http://x$path")
+
+                val html = """
+                    <html><body style="font-family:sans-serif;text-align:center;padding-top:60px;background:#16213e;color:white">
+                    <h2 style="color:#d97706">Login successful!</h2>
+                    <p>You can return to the Claude Widget app.</p>
+                    </body></html>
+                """.trimIndent()
+                val response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n" +
+                    "Content-Length: ${html.toByteArray().size}\r\nConnection: close\r\n\r\n$html"
+                socket.getOutputStream().write(response.toByteArray())
+                socket.close()
+
+                Pair(callbackUri.getQueryParameter("code"), callbackUri.getQueryParameter("state"))
+            } catch (e: Exception) {
+                Pair<String?, String?>(null, null)
+            } finally {
+                serverSocket.runCatching { close() }
+            }
+        }
+
+        if (code == null) return Result.failure(Exception("No auth code received (timeout or cancelled)"))
+        if (returnedState != state) return Result.failure(Exception("State mismatch — possible CSRF attack"))
+
+        return exchangeCodeForTokens(code, codeVerifier, redirectUri)
     }
 
     // -----------------------------------------------------------------------
     // Token exchange — POST to token endpoint
     // -----------------------------------------------------------------------
-    private suspend fun exchangeCodeForTokens(code: String, codeVerifier: String): Result<Unit> {
-        val clientId = fetchClientId()
-
+    private suspend fun exchangeCodeForTokens(
+        code: String,
+        codeVerifier: String,
+        redirectUri: String
+    ): Result<Unit> {
         val body = FormBody.Builder()
             .add("grant_type", "authorization_code")
             .add("code", code)
-            .add("redirect_uri", REDIRECT_URI)
-            .add("client_id", clientId)
+            .add("redirect_uri", redirectUri)
+            .add("client_id", CLIENT_ID)
             .add("code_verifier", codeVerifier)
             .build()
 
@@ -133,8 +141,6 @@ class OAuthManager(
                 refreshToken = responseJson.getString("refresh_token"),
                 expiresAt    = responseJson.getLong("expires_in") * 1000L + System.currentTimeMillis()
             )
-            pendingCodeVerifier = null
-            pendingState = null
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -148,12 +154,10 @@ class OAuthManager(
         val refreshToken = tokenStore.refreshToken
             ?: return Result.failure(Exception("No refresh token"))
 
-        val clientId = fetchClientId()
-
         val body = FormBody.Builder()
             .add("grant_type", "refresh_token")
             .add("refresh_token", refreshToken)
-            .add("client_id", clientId)
+            .add("client_id", CLIENT_ID)
             .build()
 
         val request = Request.Builder()
@@ -205,11 +209,10 @@ class OAuthManager(
     }
 
     companion object {
-        const val REDIRECT_URI  = "claude-widget://oauth/callback"
-        const val OAUTH_BETA    = "oauth-2025-04-20"
-        const val METADATA_URL  = "https://claude.ai/oauth/claude-code-client-metadata"
-        const val AUTH_URL      = "https://claude.ai/oauth/authorize"
-        const val TOKEN_URL     = "https://platform.claude.com/v1/oauth/token"
-        const val SCOPES        = "user:inference user:profile user:sessions:claude_code user:mcp_servers user:file_upload"
+        const val CLIENT_ID  = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+        const val OAUTH_BETA = "oauth-2025-04-20"
+        const val AUTH_URL   = "https://claude.ai/oauth/authorize"
+        const val TOKEN_URL  = "https://platform.claude.com/v1/oauth/token"
+        const val SCOPES     = "user:inference user:profile"
     }
 }

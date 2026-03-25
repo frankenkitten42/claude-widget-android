@@ -11,24 +11,14 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:allowBackup="false">
 
-        <!-- OAuth callback activity — receives claude-widget://oauth/callback -->
+        <!-- Main activity — OAuth uses loopback server (RFC 8252), no custom scheme needed -->
         <activity
             android:name=".ui.AuthActivity"
             android:exported="true"
-            android:launchMode="singleTask">
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <!-- OAuth redirect URI handler -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="claude-widget"
-                    android:host="oauth"
-                    android:pathPrefix="/callback" />
             </intent-filter>
         </activity>
 
