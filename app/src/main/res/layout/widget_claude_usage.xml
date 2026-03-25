@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="12dp">
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/tv_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Claude Usage"
+        android:textColor="@color/text_primary"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:paddingBottom="8dp" />
+
+    <!-- 5hr row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tv_5hr_label"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:text="@string/label_5hr"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp" />
+
+        <ProgressBar
+            android:id="@+id/pb_5hr"
+            style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="0dp"
+            android:layout_height="8dp"
+            android:layout_weight="1"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="@color/usage_green"
+            android:progressBackgroundTint="@color/bar_empty" />
+
+        <TextView
+            android:id="@+id/tv_5hr_pct"
+            android:layout_width="40dp"
+            android:layout_height="wrap_content"
+            android:text="0%"
+            android:textColor="@color/usage_green"
+            android:textSize="11sp"
+            android:textAlignment="textEnd"
+            android:gravity="end" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_5hr_reset"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="@color/text_cyan"
+        android:textSize="10sp"
+        android:paddingStart="36dp"
+        android:paddingBottom="6dp" />
+
+    <!-- 7day row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tv_7day_label"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:text="@string/label_7day"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp" />
+
+        <ProgressBar
+            android:id="@+id/pb_7day"
+            style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="0dp"
+            android:layout_height="8dp"
+            android:layout_weight="1"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="@color/usage_green"
+            android:progressBackgroundTint="@color/bar_empty" />
+
+        <TextView
+            android:id="@+id/tv_7day_pct"
+            android:layout_width="40dp"
+            android:layout_height="wrap_content"
+            android:text="0%"
+            android:textColor="@color/usage_green"
+            android:textSize="11sp"
+            android:textAlignment="textEnd"
+            android:gravity="end" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_7day_reset"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="@color/text_cyan"
+        android:textSize="10sp"
+        android:paddingStart="36dp"
+        android:paddingBottom="6dp" />
+
+    <!-- Updated timestamp -->
+    <TextView
+        android:id="@+id/tv_updated"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="@color/text_secondary"
+        android:textSize="9sp" />
+
+</LinearLayout>

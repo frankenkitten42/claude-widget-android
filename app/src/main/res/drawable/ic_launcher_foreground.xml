@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple "C" lettermark for Claude Widget -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20 C35.2,20 20,35.2 20,54 C20,72.8 35.2,88 54,88
+                          C65.5,88 75.7,82.3 82,73.5 L72,67
+                          C67.8,73 61.4,77 54,77
+                          C41.3,77 31,66.7 31,54
+                          C31,41.3 41.3,31 54,31
+                          C61.4,31 67.8,35 72,41 L82,34.5
+                          C75.7,25.7 65.5,20 54,20 Z" />
+</vector>

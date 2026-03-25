@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Block all cleartext traffic -->
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!-- Pin certs for Anthropic API -->
+    <domain-config>
+        <domain includeSubdomains="true">api.anthropic.com</domain>
+        <domain includeSubdomains="true">claude.ai</domain>
+        <domain includeSubdomains="true">platform.claude.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
