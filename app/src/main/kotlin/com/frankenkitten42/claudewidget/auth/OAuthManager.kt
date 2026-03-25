@@ -52,12 +52,13 @@ class OAuthManager(
             ServerSocket(0).also { it.soTimeout = 300_000 } // 5 min timeout
         }
         val port = serverSocket.localPort
-        val redirectUri = "http://127.0.0.1:$port"
+        val redirectUri = "http://localhost:$port/callback"
 
         val authUri = Uri.parse(AUTH_URL).buildUpon()
+            .appendQueryParameter("code", "true")        // required by Claude's server
             .appendQueryParameter("client_id", CLIENT_ID)
-            .appendQueryParameter("redirect_uri", redirectUri)
             .appendQueryParameter("response_type", "code")
+            .appendQueryParameter("redirect_uri", redirectUri)
             .appendQueryParameter("scope", SCOPES)
             .appendQueryParameter("code_challenge", codeChallenge)
             .appendQueryParameter("code_challenge_method", "S256")
@@ -213,6 +214,6 @@ class OAuthManager(
         const val OAUTH_BETA = "oauth-2025-04-20"
         const val AUTH_URL   = "https://claude.ai/oauth/authorize"
         const val TOKEN_URL  = "https://platform.claude.com/v1/oauth/token"
-        const val SCOPES     = "user:inference user:profile"
+        const val SCOPES     = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
     }
 }
