@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Block all cleartext traffic except loopback (OAuth callback server) -->
+    <!-- Block all cleartext traffic globally -->
     <base-config cleartextTrafficPermitted="false" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
 
     <!-- Pin certs for Anthropic API -->
     <domain-config>
