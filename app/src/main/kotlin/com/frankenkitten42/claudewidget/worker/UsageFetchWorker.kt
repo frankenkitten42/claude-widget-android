@@ -24,7 +24,7 @@ class UsageFetchWorker(
     override suspend fun doWork(): Result {
         val httpClient = OkHttpClient()
         val tokenStore = TokenStore(context)
-        val oauthManager = OAuthManager(context, tokenStore, httpClient)
+        val oauthManager = OAuthManager(tokenStore, httpClient)
         val usageApi = UsageApi(tokenStore, oauthManager, httpClient)
 
         val appWidgetManager = AppWidgetManager.getInstance(context)
