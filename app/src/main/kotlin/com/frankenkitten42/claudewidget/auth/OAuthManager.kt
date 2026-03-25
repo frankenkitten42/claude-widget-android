@@ -1,6 +1,8 @@
 package com.frankenkitten42.claudewidget.auth
 
+import android.content.Context
 import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -15,17 +17,18 @@ import java.util.Base64
 /**
  * Handles the OAuth 2.0 + PKCE flow for Claude authentication.
  *
- * Uses a WebView for the authorization step (so we can intercept the redirect
- * without a local server or Chrome Custom Tab PNA restrictions).
+ * Uses Chrome Custom Tab so Google sign-in works (Google blocks embedded WebViews).
+ * Redirect URI is our own custom scheme; Android delivers the callback as an Intent.
  *
  * Flow:
- * 1. Call prepareAuthUrl() to get the URL to load in the WebView
- * 2. WebView loads the URL; user authenticates on claude.ai
- * 3. Claude redirects to REDIRECT_URI with code + state query params
- * 4. AuthActivity intercepts the redirect via WebViewClient and calls handleCallback()
+ * 1. prepareAuthUrl() → builds URL, stores PKCE state, returns URL to open
+ * 2. AuthActivity opens Chrome Custom Tab with that URL
+ * 3. User authenticates; Claude redirects to claude-widget://oauth/callback?code=...
+ * 4. Android fires an Intent to AuthActivity (singleTop); onNewIntent calls handleCallback()
  * 5. handleCallback() validates state, exchanges code for tokens via JSON POST
  */
 class OAuthManager(
+    private val context: Context,
     private val tokenStore: TokenStore,
     private val httpClient: OkHttpClient
 ) {
@@ -33,11 +36,8 @@ class OAuthManager(
     private var pendingCodeVerifier: String? = null
     private var pendingState: String? = null
 
-    /**
-     * Builds the authorization URL and stores PKCE state for later validation.
-     * The caller should load this URL in a WebView.
-     */
-    fun prepareAuthUrl(): String {
+    /** Builds the authorization URL, stores PKCE state, and opens a Chrome Custom Tab. */
+    fun launchAuthFlow() {
         val codeVerifier = generateCodeVerifier()
         val codeChallenge = generateCodeChallenge(codeVerifier)
         val state = generateState()
@@ -45,7 +45,7 @@ class OAuthManager(
         pendingCodeVerifier = codeVerifier
         pendingState = state
 
-        return Uri.parse(AUTH_URL).buildUpon()
+        val authUri = Uri.parse(AUTH_URL).buildUpon()
             .appendQueryParameter("code", "true")
             .appendQueryParameter("client_id", CLIENT_ID)
             .appendQueryParameter("response_type", "code")
@@ -55,12 +55,16 @@ class OAuthManager(
             .appendQueryParameter("code_challenge_method", "S256")
             .appendQueryParameter("state", state)
             .build()
-            .toString()
+
+        CustomTabsIntent.Builder()
+            .setShowTitle(true)
+            .build()
+            .launchUrl(context, authUri)
     }
 
     /**
-     * Called by AuthActivity when the WebView intercepts the redirect to REDIRECT_URI.
-     * Validates state nonce, then exchanges the auth code for tokens.
+     * Called when Chrome redirects to claude-widget://oauth/callback.
+     * Validates state nonce, then exchanges the code for tokens.
      */
     suspend fun handleCallback(callbackUri: Uri): Result<Unit> {
         val code = callbackUri.getQueryParameter("code")
@@ -70,6 +74,7 @@ class OAuthManager(
         val expectedState = pendingState
         val verifier = pendingCodeVerifier
 
+        // Clear pending state before any async work
         pendingState = null
         pendingCodeVerifier = null
 
@@ -84,7 +89,7 @@ class OAuthManager(
     }
 
     // -----------------------------------------------------------------------
-    // Token exchange — JSON POST (matching CLI behaviour)
+    // Token exchange — JSON body, matching CLI behaviour
     // -----------------------------------------------------------------------
     private suspend fun exchangeCodeForTokens(code: String, codeVerifier: String): Result<Unit> {
         val json = JSONObject().apply {
@@ -105,9 +110,7 @@ class OAuthManager(
             val responseJson = withContext(Dispatchers.IO) {
                 httpClient.newCall(request).execute().use { response ->
                     val body = response.body?.string() ?: ""
-                    check(response.isSuccessful) {
-                        "Token exchange failed ${response.code}: $body"
-                    }
+                    check(response.isSuccessful) { "Token exchange failed ${response.code}: $body" }
                     JSONObject(body)
                 }
             }
@@ -123,7 +126,7 @@ class OAuthManager(
     }
 
     // -----------------------------------------------------------------------
-    // Token refresh — JSON POST
+    // Token refresh — JSON body
     // -----------------------------------------------------------------------
     suspend fun refreshTokens(): Result<Unit> {
         val refreshToken = tokenStore.refreshToken
@@ -165,8 +168,7 @@ class OAuthManager(
     }
 
     // -----------------------------------------------------------------------
-    // PKCE helpers — matches CLI: base64url(randomBytes(32)) for verifier/state,
-    // base64url(sha256(verifier)) for challenge
+    // PKCE helpers — base64url(randomBytes(32)), sha256 challenge
     // -----------------------------------------------------------------------
     private fun generateCodeVerifier(): String {
         val bytes = ByteArray(32)
@@ -190,7 +192,7 @@ class OAuthManager(
         const val OAUTH_BETA   = "oauth-2025-04-20"
         const val AUTH_URL     = "https://claude.ai/oauth/authorize"
         const val TOKEN_URL    = "https://platform.claude.com/v1/oauth/token"
-        const val REDIRECT_URI = "http://localhost/callback"
+        const val REDIRECT_URI = "claude-widget://oauth/callback"
         const val SCOPES       = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
     }
 }

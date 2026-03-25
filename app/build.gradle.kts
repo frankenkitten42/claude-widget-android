@@ -42,6 +42,9 @@ dependencies {
     // WorkManager — periodic background fetch
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
+    // Chrome Custom Tab — OAuth browser flow
+    implementation("androidx.browser:browser:1.8.0")
+
     // OkHttp — HTTP client
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 

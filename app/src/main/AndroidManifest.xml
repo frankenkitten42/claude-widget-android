@@ -11,7 +11,7 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:allowBackup="false">
 
-        <!-- Main activity — OAuth uses loopback server (RFC 8252), no custom scheme needed -->
+        <!-- Main activity — singleTop so onNewIntent receives the OAuth callback -->
         <activity
             android:name=".ui.AuthActivity"
             android:exported="true"
@@ -19,6 +19,16 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Receives claude-widget://oauth/callback from Chrome Custom Tab -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="claude-widget"
+                    android:host="oauth"
+                    android:pathPrefix="/callback" />
             </intent-filter>
         </activity>
 
