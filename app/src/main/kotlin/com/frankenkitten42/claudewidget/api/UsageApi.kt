@@ -2,6 +2,8 @@ package com.frankenkitten42.claudewidget.api
 
 import com.frankenkitten42.claudewidget.auth.OAuthManager
 import com.frankenkitten42.claudewidget.auth.TokenStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -54,18 +56,20 @@ class UsageApi(
             .build()
 
         return try {
-            httpClient.newCall(request).execute().use { response ->
-                when (response.code) {
-                    200 -> {
-                        val json = JSONObject(response.body!!.string())
-                        UsageResult.Success(parseUsageData(json))
+            withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    when (response.code) {
+                        200 -> {
+                            val json = JSONObject(response.body!!.string())
+                            UsageResult.Success(parseUsageData(json))
+                        }
+                        429 -> UsageResult.RateLimited
+                        401 -> {
+                            tokenStore.clear()
+                            UsageResult.AuthRequired
+                        }
+                        else -> UsageResult.Error("HTTP ${response.code}")
                     }
-                    429 -> UsageResult.RateLimited
-                    401 -> {
-                        tokenStore.clear()
-                        UsageResult.AuthRequired
-                    }
-                    else -> UsageResult.Error("HTTP ${response.code}")
                 }
             }
         } catch (e: Exception) {

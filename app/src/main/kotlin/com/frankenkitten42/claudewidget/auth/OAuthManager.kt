@@ -3,6 +3,8 @@ package com.frankenkitten42.claudewidget.auth
 import android.content.Context
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -40,9 +42,11 @@ class OAuthManager(
             .url(METADATA_URL)
             .header("anthropic-beta", OAUTH_BETA)
             .build()
-        val body = httpClient.newCall(request).execute().use { response ->
-            check(response.isSuccessful) { "Metadata fetch failed: ${response.code}" }
-            response.body!!.string()
+        val body = withContext(Dispatchers.IO) {
+            httpClient.newCall(request).execute().use { response ->
+                check(response.isSuccessful) { "Metadata fetch failed: ${response.code}" }
+                response.body!!.string()
+            }
         }
         return JSONObject(body).getString("client_id")
     }
@@ -118,9 +122,11 @@ class OAuthManager(
             .build()
 
         return try {
-            val responseJson = httpClient.newCall(request).execute().use { response ->
-                check(response.isSuccessful) { "Token exchange failed: ${response.code}" }
-                JSONObject(response.body!!.string())
+            val responseJson = withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    check(response.isSuccessful) { "Token exchange failed: ${response.code}" }
+                    JSONObject(response.body!!.string())
+                }
             }
             tokenStore.save(
                 accessToken  = responseJson.getString("access_token"),
@@ -157,13 +163,15 @@ class OAuthManager(
             .build()
 
         return try {
-            val responseJson = httpClient.newCall(request).execute().use { response ->
-                if (response.code == 401) {
-                    tokenStore.clear()
-                    return Result.failure(Exception("Refresh token expired — re-auth required"))
+            val responseJson = withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.code == 401) {
+                        tokenStore.clear()
+                        throw Exception("Refresh token expired — re-auth required")
+                    }
+                    check(response.isSuccessful) { "Token refresh failed: ${response.code}" }
+                    JSONObject(response.body!!.string())
                 }
-                check(response.isSuccessful) { "Token refresh failed: ${response.code}" }
-                JSONObject(response.body!!.string())
             }
             tokenStore.save(
                 accessToken  = responseJson.getString("access_token"),

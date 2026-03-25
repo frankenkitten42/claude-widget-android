@@ -19,4 +19,5 @@
     <!-- App theme -->
     <color name="colorPrimary">#1A1A2E</color>
     <color name="colorSurface">#16213E</color>
+    <color name="colorButton">#D97706</color>
 </resources>
