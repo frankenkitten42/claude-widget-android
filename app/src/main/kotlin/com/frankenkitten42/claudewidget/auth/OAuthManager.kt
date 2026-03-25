@@ -2,6 +2,7 @@ package com.frankenkitten42.claudewidget.auth
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.browser.customtabs.CustomTabsIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -58,6 +59,8 @@ class OAuthManager(
             .appendQueryParameter("state", state)
             .build()
 
+        Log.d("OAuthManager", "Auth URL: $authUri")
+
         CustomTabsIntent.Builder()
             .setShowTitle(true)
             .build()
@@ -97,10 +100,13 @@ class OAuthManager(
             .header("anthropic-beta", OAUTH_BETA)
             .build()
 
+        Log.d("OAuthManager", "Token exchange: code=${code.take(10)}..., redirect=$REDIRECT_URI")
+
         return try {
             val responseJson = withContext(Dispatchers.IO) {
                 httpClient.newCall(request).execute().use { response ->
                     val body = response.body?.string() ?: ""
+                    Log.d("OAuthManager", "Token response ${response.code}: $body")
                     check(response.isSuccessful) { "Token exchange failed ${response.code}: $body" }
                     JSONObject(body)
                 }
@@ -181,7 +187,7 @@ class OAuthManager(
     companion object {
         const val CLIENT_ID    = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
         const val OAUTH_BETA   = "oauth-2025-04-20"
-        const val AUTH_URL     = "https://claude.ai/oauth/authorize"
+        const val AUTH_URL     = "https://platform.claude.com/oauth/authorize"
         const val TOKEN_URL    = "https://platform.claude.com/v1/oauth/token"
         const val REDIRECT_URI = "https://platform.claude.com/oauth/code/callback"
         const val SCOPES       = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"

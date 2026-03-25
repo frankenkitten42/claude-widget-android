@@ -52,7 +52,7 @@ class AuthActivity : AppCompatActivity() {
         submitCodeButton = findViewById(R.id.btn_submit_code)
 
         signInButton.setOnClickListener {
-            setStatus("Opening Claude sign-in…\nAfter authorizing, copy the code shown and paste it below.")
+            setStatus("Opening Claude sign-in…\n\n1. Sign in and click Authorize\n2. Copy the code shown on the next page\n3. Come back here and paste it below")
             signInButton.isEnabled = false
             oauthManager.launchAuthFlow()
             // Show code input area when user returns from browser
