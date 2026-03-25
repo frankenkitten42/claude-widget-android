@@ -24,7 +24,7 @@
         android:textColor="@color/text_secondary"
         android:textSize="14sp"
         android:gravity="center"
-        android:paddingBottom="32dp" />
+        android:paddingBottom="24dp" />
 
     <Button
         android:id="@+id/btn_sign_in"
@@ -35,6 +35,47 @@
         android:textColor="@color/text_primary"
         android:paddingStart="32dp"
         android:paddingEnd="32dp" />
+
+    <!-- Code paste area — shown after user returns from Chrome -->
+    <LinearLayout
+        android:id="@+id/layout_code_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingTop="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Paste the authorization code here:"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:paddingBottom="8dp" />
+
+        <EditText
+            android:id="@+id/et_auth_code"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Authorization code"
+            android:textColor="@color/text_primary"
+            android:textColorHint="#80FFFFFF"
+            android:backgroundTint="@color/text_secondary"
+            android:inputType="text"
+            android:singleLine="true"
+            android:paddingBottom="12dp" />
+
+        <Button
+            android:id="@+id/btn_submit_code"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Submit Code"
+            android:backgroundTint="@color/colorButton"
+            android:textColor="@color/text_primary"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp" />
+    </LinearLayout>
 
     <Button
         android:id="@+id/btn_sign_out"

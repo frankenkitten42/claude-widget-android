@@ -18,14 +18,16 @@ import java.util.Base64
  * Handles the OAuth 2.0 + PKCE flow for Claude authentication.
  *
  * Uses Chrome Custom Tab so Google sign-in works (Google blocks embedded WebViews).
- * Redirect URI is our own custom scheme; Android delivers the callback as an Intent.
+ * Redirect URI is the platform's manual callback page, which displays the auth code
+ * for the user to copy/paste back into the app.
  *
  * Flow:
- * 1. prepareAuthUrl() → builds URL, stores PKCE state, returns URL to open
- * 2. AuthActivity opens Chrome Custom Tab with that URL
- * 3. User authenticates; Claude redirects to claude-widget://oauth/callback?code=...
- * 4. Android fires an Intent to AuthActivity (singleTop); onNewIntent calls handleCallback()
- * 5. handleCallback() validates state, exchanges code for tokens via JSON POST
+ * 1. launchAuthFlow() → builds URL, stores PKCE state, opens Chrome Custom Tab
+ * 2. User authenticates on claude.ai
+ * 3. Claude redirects to platform.claude.com/oauth/code/callback?code=...
+ * 4. Platform page displays the authorization code
+ * 5. User copies the code, returns to the app, pastes it
+ * 6. exchangeManualCode() validates state and exchanges code for tokens
  */
 class OAuthManager(
     private val context: Context,
@@ -63,29 +65,18 @@ class OAuthManager(
     }
 
     /**
-     * Called when Chrome redirects to claude-widget://oauth/callback.
-     * Validates state nonce, then exchanges the code for tokens.
+     * Called when the user pastes the authorization code from the platform callback page.
+     * Exchanges the code for tokens.
      */
-    suspend fun handleCallback(callbackUri: Uri): Result<Unit> {
-        val code = callbackUri.getQueryParameter("code")
-            ?: return Result.failure(Exception("No auth code in callback"))
-
-        val returnedState = callbackUri.getQueryParameter("state")
-        val expectedState = pendingState
+    suspend fun exchangeManualCode(code: String): Result<Unit> {
         val verifier = pendingCodeVerifier
+            ?: return Result.failure(Exception("No pending auth flow — tap Sign In first"))
 
-        // Clear pending state before any async work
+        // Clear pending state
         pendingState = null
         pendingCodeVerifier = null
 
-        if (returnedState != expectedState) {
-            return Result.failure(Exception("State mismatch — possible CSRF attack"))
-        }
-        if (verifier == null) {
-            return Result.failure(Exception("No pending code verifier"))
-        }
-
-        return exchangeCodeForTokens(code, verifier)
+        return exchangeCodeForTokens(code.trim(), verifier)
     }
 
     // -----------------------------------------------------------------------
@@ -192,7 +183,7 @@ class OAuthManager(
         const val OAUTH_BETA   = "oauth-2025-04-20"
         const val AUTH_URL     = "https://claude.ai/oauth/authorize"
         const val TOKEN_URL    = "https://platform.claude.com/v1/oauth/token"
-        const val REDIRECT_URI = "claude-widget://oauth/callback"
+        const val REDIRECT_URI = "https://platform.claude.com/oauth/code/callback"
         const val SCOPES       = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
     }
 }
