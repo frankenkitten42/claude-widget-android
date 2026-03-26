@@ -40,6 +40,18 @@
             android:text="This widget reads usage data from a file written by a Termux script.\n\nSetup:\n1. Install Termux, Termux:Boot, and Termux:API\n2. Run the fetch script once to create the data file:\n   proot-distro login debian -- /root/.local/bin/claude-usage-fetch.sh\n3. Copy the boot script to ~/.termux/boot/ for automatic background fetching\n4. Add the widget to your home screen\n\nData file location:\n/storage/emulated/0/Documents/claude-usage/latest.json" />
 
         <Button
+            android:id="@+id/btn_storage_permission"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Grant Storage Access"
+            android:backgroundTint="#D97706"
+            android:textColor="@color/text_primary"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:layout_marginBottom="12dp"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/btn_refresh"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

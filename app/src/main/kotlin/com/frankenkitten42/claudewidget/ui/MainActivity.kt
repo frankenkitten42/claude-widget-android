@@ -1,9 +1,13 @@
 package com.frankenkitten42.claudewidget.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
@@ -27,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var setupText: TextView
     private lateinit var debugText: TextView
     private lateinit var refreshButton: Button
+    private lateinit var storageButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,9 +41,7 @@ class MainActivity : AppCompatActivity() {
         setupText     = findViewById(R.id.tv_setup)
         debugText     = findViewById(R.id.tv_debug)
         refreshButton = findViewById(R.id.btn_refresh)
-
-        // Request storage permission on older Android versions
-        requestStorageIfNeeded()
+        storageButton = findViewById(R.id.btn_storage_permission)
 
         // Schedule the periodic worker
         UsageFetchWorker.schedule(this)
@@ -49,6 +52,10 @@ class MainActivity : AppCompatActivity() {
             updateDisplay()
         }
 
+        storageButton.setOnClickListener {
+            requestStorageAccess()
+        }
+
         updateDisplay()
     }
 
@@ -57,10 +64,54 @@ class MainActivity : AppCompatActivity() {
         updateDisplay()
     }
 
+    private fun hasStorageAccess(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestStorageAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ — open Settings for "All files access"
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
+        } else {
+            // Android 10 and below — runtime permission
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
+                100
+            )
+        }
+    }
+
     private fun updateDisplay() {
-        val reader = UsageFileReader()
         val diag = StringBuilder()
 
+        // Check storage permission first
+        val hasAccess = hasStorageAccess()
+        diag.appendLine("Storage access: ${if (hasAccess) "granted" else "NOT GRANTED"}")
+
+        if (!hasAccess) {
+            statusText.text = "Storage permission needed"
+            setupText.visibility = View.GONE
+            storageButton.visibility = View.VISIBLE
+            diag.appendLine()
+            diag.appendLine("The app needs 'All files access' to read")
+            diag.appendLine("the usage data file written by Termux.")
+            diag.appendLine("Tap the button above to grant it.")
+            debugText.text = diag.toString()
+            return
+        }
+
+        storageButton.visibility = View.GONE
+
+        val reader = UsageFileReader()
         val dir = UsageFileReader.DATA_DIR
         val jsonFile = File(dir, "latest.json")
         val statusFile = File(dir, "status")
@@ -112,23 +163,6 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             "unknown"
         }
-    }
-
-    private fun requestStorageIfNeeded() {
-        // On API 29 and below, we need READ_EXTERNAL_STORAGE to read Documents/
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
-                    100
-                )
-            }
-        }
-        // On API 30+, MANAGE_EXTERNAL_STORAGE may be needed for Documents/ access
-        // But first try without it — many devices allow reading Documents/ without special permission
     }
 
     override fun onRequestPermissionsResult(
