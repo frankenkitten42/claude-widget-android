@@ -71,17 +71,29 @@ class OAuthManager(
      * Called when the user pastes the authorization code from the platform callback page.
      * Exchanges the code for tokens.
      */
-    suspend fun exchangeManualCode(code: String): Result<Unit> {
+    suspend fun exchangeManualCode(rawCode: String): Result<Unit> {
         val verifier = pendingCodeVerifier
             ?: return Result.failure(Exception("No pending auth flow — tap Sign In first"))
-        val state = pendingState
+        val expectedState = pendingState
             ?: return Result.failure(Exception("No pending state — tap Sign In first"))
+
+        // The callback page shows "AUTH_CODE#STATE" — split on #
+        val parts = rawCode.trim().split("#", limit = 2)
+        val code = parts[0]
+        val returnedState = parts.getOrNull(1)
+
+        if (code.isEmpty()) {
+            return Result.failure(Exception("No authorization code found"))
+        }
+        if (returnedState != null && returnedState != expectedState) {
+            return Result.failure(Exception("State mismatch — possible CSRF attack"))
+        }
 
         // Clear pending state
         pendingState = null
         pendingCodeVerifier = null
 
-        return exchangeCodeForTokens(code.trim(), verifier, state)
+        return exchangeCodeForTokens(code, verifier, expectedState)
     }
 
     // -----------------------------------------------------------------------
