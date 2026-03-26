@@ -13,7 +13,9 @@ that reads Claude Code's own credentials.
 
 Phase 1 (Termux:Widget bash PoC) — **complete**, working in `~/projects/claude-widget/`
 Phase 2 (Native Android app v1 — OAuth) — **abandoned**, OAuth violates ToS
-Phase 3 (Native Android app v2 — file bridge) — **in progress**
+Phase 3 (Native Android app v2 — file bridge) — **working**
+
+**Widget is live on home screen showing real usage data.**
 
 ---
 
@@ -69,7 +71,7 @@ com.frankenkitten42.claudewidget/
 ### Key Files
 | File | Purpose |
 |------|---------|
-| `app/src/main/AndroidManifest.xml` | Permissions, widget receiver, no INTERNET |
+| `app/src/main/AndroidManifest.xml` | Permissions (MANAGE_EXTERNAL_STORAGE), widget receiver, no INTERNET |
 | `app/src/main/res/xml/appwidget_info.xml` | Widget size (3×2 cells, 250×110dp) |
 | `app/src/main/res/layout/widget_claude_usage.xml` | Widget RemoteViews layout |
 | `app/src/main/res/layout/activity_main.xml` | Status/setup screen |
@@ -128,7 +130,14 @@ App only reads `five_hour` and `seven_day`, ignores other fields.
 
 ---
 
-## Termux Setup Requirements
+## Setup Requirements
+
+### Android App
+- Install APK (sideload from GitHub Actions artifacts)
+- Grant **"All files access"** permission when prompted (Android 11+ requires this
+  to read from `/storage/emulated/0/Documents/`). One-time, persists across updates.
+
+### Termux
 - **Termux** — terminal emulator
 - **Termux:Boot** — runs scripts at device boot without a visible terminal
 - **Termux:API** — provides `termux-wake-lock` to prevent Doze from killing the fetch loop
@@ -161,6 +170,19 @@ Full OAuth flow using Claude Code's client_id. Worked technically but violates T
 6 OAuth iteration attempts documented; final approach used manual code paste flow.
 Kept in git history for reference.
 
-### v2 (File bridge) — current
+### v2 (File bridge) — current, working
 Removed all OAuth/API code. App reads a JSON file written by a Termux bash script.
 No network permissions, no token storage, minimal dependencies.
+Requires `MANAGE_EXTERNAL_STORAGE` on Android 11+ to read Documents/.
+
+---
+
+## Polish / Future Work
+- Data shown can lag ~10 minutes (both bash fetch and widget read are on 10-min cycles)
+- Dynamic progress bar coloring not yet implemented (bars are static green from XML)
+- Could reduce lag by having the widget read the file more frequently than 10 min
+- Termux:Boot background loop may be killed by aggressive battery optimization —
+  user should disable battery optimization for Termux in Android settings
+- No tap-to-refresh on the widget itself (could add a PendingIntent)
+- Widget could show data age ("3m ago") instead of absolute timestamp
+- Setup flow could be more automated
