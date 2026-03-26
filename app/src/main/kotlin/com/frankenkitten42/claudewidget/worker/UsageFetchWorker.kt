@@ -3,6 +3,7 @@ package com.frankenkitten42.claudewidget.worker
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.work.*
 import com.frankenkitten42.claudewidget.api.UsageApi
@@ -38,10 +39,20 @@ class UsageFetchWorker(
         Log.d(TAG, "doWork: widgetIds=${widgetIds.toList()}")
         if (widgetIds.isEmpty()) return Result.success()
 
+        val cache = context.getSharedPreferences("usage_cache", Context.MODE_PRIVATE)
+
         return when (val result = usageApi.fetchUsage()) {
             is UsageResult.Success -> {
                 val data = result.data
                 Log.d(TAG, "doWork: SUCCESS 5hr=${data.fiveHour.utilization}% 7d=${data.sevenDay.utilization}%")
+                // Cache the successful result
+                cache.edit()
+                    .putFloat("five_hr_util", data.fiveHour.utilization.toFloat())
+                    .putString("five_hr_resets", data.fiveHour.resetsAt)
+                    .putFloat("seven_day_util", data.sevenDay.utilization.toFloat())
+                    .putString("seven_day_resets", data.sevenDay.resetsAt)
+                    .putLong("cached_at", System.currentTimeMillis())
+                    .apply()
                 ClaudeUsageWidget.updateWidgets(
                     context          = context,
                     appWidgetManager = appWidgetManager,
@@ -54,7 +65,8 @@ class UsageFetchWorker(
                 Result.success()
             }
             is UsageResult.RateLimited -> {
-                Log.d(TAG, "doWork: RATE LIMITED")
+                Log.d(TAG, "doWork: RATE LIMITED — showing cached data")
+                showCachedOrFallback(cache, appWidgetManager, widgetIds)
                 Result.success()
             }
             is UsageResult.AuthRequired -> {
@@ -64,19 +76,57 @@ class UsageFetchWorker(
             }
             is UsageResult.Error -> {
                 Log.e(TAG, "doWork: ERROR ${result.message}")
-                ClaudeUsageWidget.updateWidgets(
-                    context          = context,
-                    appWidgetManager = appWidgetManager,
-                    appWidgetIds     = widgetIds,
-                    fiveHrUtil       = 0.0,
-                    fiveHrResetsAt   = "",
-                    sevenDayUtil     = 0.0,
-                    sevenDayResetsAt = "",
-                    isOffline        = true,
-                    errorDetail      = result.message
-                )
+                // Show cached data if available, otherwise show error
+                val cachedAt = cache.getLong("cached_at", 0L)
+                if (cachedAt > 0) {
+                    Log.d(TAG, "doWork: showing cached data from error path")
+                    showCachedOrFallback(cache, appWidgetManager, widgetIds)
+                } else {
+                    ClaudeUsageWidget.updateWidgets(
+                        context          = context,
+                        appWidgetManager = appWidgetManager,
+                        appWidgetIds     = widgetIds,
+                        fiveHrUtil       = 0.0,
+                        fiveHrResetsAt   = "",
+                        sevenDayUtil     = 0.0,
+                        sevenDayResetsAt = "",
+                        isOffline        = true,
+                        errorDetail      = result.message
+                    )
+                }
                 if (runAttemptCount < 3) Result.retry() else Result.success()
             }
+        }
+    }
+
+    private fun showCachedOrFallback(
+        cache: SharedPreferences,
+        appWidgetManager: AppWidgetManager,
+        widgetIds: IntArray
+    ) {
+        val cachedAt = cache.getLong("cached_at", 0L)
+        if (cachedAt > 0) {
+            ClaudeUsageWidget.updateWidgets(
+                context          = context,
+                appWidgetManager = appWidgetManager,
+                appWidgetIds     = widgetIds,
+                fiveHrUtil       = cache.getFloat("five_hr_util", 0f).toDouble(),
+                fiveHrResetsAt   = cache.getString("five_hr_resets", "") ?: "",
+                sevenDayUtil     = cache.getFloat("seven_day_util", 0f).toDouble(),
+                sevenDayResetsAt = cache.getString("seven_day_resets", "") ?: ""
+            )
+        } else {
+            ClaudeUsageWidget.updateWidgets(
+                context          = context,
+                appWidgetManager = appWidgetManager,
+                appWidgetIds     = widgetIds,
+                fiveHrUtil       = 0.0,
+                fiveHrResetsAt   = "",
+                sevenDayUtil     = 0.0,
+                sevenDayResetsAt = "",
+                isOffline        = true,
+                errorDetail      = "No cached data yet"
+            )
         }
     }
 
