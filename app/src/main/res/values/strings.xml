@@ -1,13 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Claude Widget</string>
-    <string name="widget_description">Displays Claude API usage for 5-hour and 7-day windows</string>
-    <string name="auth_title">Sign in to Claude</string>
-    <string name="auth_button">Sign In</string>
-    <string name="sign_out">Sign Out</string>
+    <string name="widget_description">Displays Claude usage for 5-hour and 7-day windows</string>
     <string name="status_loading">Loading…</string>
     <string name="status_offline">Offline</string>
-    <string name="status_auth_required">Tap to sign in</string>
     <string name="label_5hr">5hr</string>
     <string name="label_7day">7day</string>
     <string name="label_resets">Resets:</string>

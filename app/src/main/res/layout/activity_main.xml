@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorSurface">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Claude Widget"
+            android:textColor="@color/text_primary"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:paddingBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Checking..."
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:id="@+id/tv_setup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#FFCCCCCC"
+            android:textSize="13sp"
+            android:lineSpacingExtra="4dp"
+            android:paddingBottom="16dp"
+            android:visibility="gone"
+            android:text="This widget reads usage data from a file written by a Termux script.\n\nSetup:\n1. Install Termux, Termux:Boot, and Termux:API\n2. Run the fetch script once to create the data file:\n   proot-distro login debian -- /root/.local/bin/claude-usage-fetch.sh\n3. Copy the boot script to ~/.termux/boot/ for automatic background fetching\n4. Add the widget to your home screen\n\nData file location:\n/storage/emulated/0/Documents/claude-usage/latest.json" />
+
+        <Button
+            android:id="@+id/btn_refresh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Refresh Widget"
+            android:backgroundTint="@color/colorButton"
+            android:textColor="@color/text_primary"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp" />
+
+        <TextView
+            android:id="@+id/tv_debug"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#AAAAAA"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:paddingTop="16dp" />
+
+    </LinearLayout>
+</ScrollView>

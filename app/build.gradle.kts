@@ -11,8 +11,8 @@ android {
         applicationId = "com.frankenkitten42.claudewidget"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
     }
 
     signingConfigs {
@@ -51,20 +51,8 @@ android {
 }
 
 dependencies {
-    // Jetpack Security — Keystore-backed EncryptedSharedPreferences
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
-    // WorkManager — periodic background fetch
+    // WorkManager — periodic background file reads
     implementation("androidx.work:work-runtime-ktx:2.9.0")
-
-    // Chrome Custom Tab — OAuth browser flow
-    implementation("androidx.browser:browser:1.8.0")
-
-    // OkHttp — HTTP client
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-    // Kotlin coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // Core KTX
     implementation("androidx.core:core-ktx:1.12.0")

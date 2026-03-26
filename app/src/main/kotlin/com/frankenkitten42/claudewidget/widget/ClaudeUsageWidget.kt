@@ -22,14 +22,13 @@ class ClaudeUsageWidget : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        // Trigger a fresh fetch when the widget is tapped or updated
+        // Trigger a file re-read when the widget is updated
         WorkManager.getInstance(context)
             .enqueue(OneTimeWorkRequestBuilder<UsageFetchWorker>().build())
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        // Handle forced refresh broadcasts
         if (intent.action == ACTION_FORCE_REFRESH) {
             WorkManager.getInstance(context)
                 .enqueue(OneTimeWorkRequestBuilder<UsageFetchWorker>().build())
@@ -39,7 +38,6 @@ class ClaudeUsageWidget : AppWidgetProvider() {
     companion object {
         const val ACTION_FORCE_REFRESH = "com.frankenkitten42.claudewidget.FORCE_REFRESH"
 
-        // Color thresholds — match PoC exactly
         fun usageColor(utilization: Double): Int = when {
             utilization <= 50.0 -> Color.parseColor("#4CAF50")  // green
             utilization <= 75.0 -> Color.parseColor("#FFC107")  // yellow
@@ -48,8 +46,7 @@ class ClaudeUsageWidget : AppWidgetProvider() {
         }
 
         /**
-         * Push new data to all widget instances. Called by UsageFetchWorker
-         * after a successful fetch.
+         * Push new data to all widget instances.
          */
         fun updateWidgets(
             context: Context,
@@ -60,7 +57,8 @@ class ClaudeUsageWidget : AppWidgetProvider() {
             sevenDayUtil: Double,
             sevenDayResetsAt: String,
             isOffline: Boolean = false,
-            errorDetail: String? = null
+            errorDetail: String? = null,
+            fetchedAtEpoch: Long = 0L
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_claude_usage)
 
@@ -84,23 +82,29 @@ class ClaudeUsageWidget : AppWidgetProvider() {
             // Updated timestamp
             val updatedText = if (isOffline) {
                 if (errorDetail != null) "⚠ $errorDetail" else "⚠ Offline"
+            } else if (fetchedAtEpoch > 0) {
+                val fetchedInstant = Instant.ofEpochSecond(fetchedAtEpoch)
+                val fmt = DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.systemDefault())
+                "Updated: ${fmt.format(fetchedInstant)}"
             } else {
                 "Updated: ${DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.systemDefault()).format(Instant.now())}"
             }
             views.setTextViewText(R.id.tv_updated, updatedText)
+            views.setTextViewText(R.id.tv_title, "Claude Usage")
 
             appWidgetIds.forEach { id ->
                 appWidgetManager.updateAppWidget(id, views)
             }
         }
 
-        fun showAuthRequired(
+        fun showSetupRequired(
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetIds: IntArray
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_claude_usage)
-            views.setTextViewText(R.id.tv_title, "Claude Usage — Tap to sign in")
+            views.setTextViewText(R.id.tv_title, "Claude Usage — Setup needed")
+            views.setTextViewText(R.id.tv_updated, "Open app for instructions")
             appWidgetIds.forEach { id -> appWidgetManager.updateAppWidget(id, views) }
         }
 
