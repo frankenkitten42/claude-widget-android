@@ -70,10 +70,6 @@ class ClaudeUsageWidget : AppWidgetProvider() {
             views.setProgressBar(R.id.pb_5hr,  100, fiveHrUtil.toInt(),  false)
             views.setProgressBar(R.id.pb_7day, 100, sevenDayUtil.toInt(), false)
 
-            // Tint progress bars to match threshold color
-            views.setInt(R.id.pb_5hr,  "setProgressTintList", fiveColor)
-            views.setInt(R.id.pb_7day, "setProgressTintList", sevenColor)
-
             // Percentage labels
             views.setTextViewText(R.id.tv_5hr_pct,  "${fiveHrUtil.toInt()}%")
             views.setTextViewText(R.id.tv_7day_pct, "${sevenDayUtil.toInt()}%")
