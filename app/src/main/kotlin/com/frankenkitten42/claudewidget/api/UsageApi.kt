@@ -48,12 +48,20 @@ class UsageApi(
             val refreshResult = oauthManager.refreshTokens()
             if (refreshResult.isFailure) {
                 Log.e(TAG, "fetchUsage: refresh failed: ${refreshResult.exceptionOrNull()?.message}")
-                return UsageResult.AuthRequired
+                // Don't give up — try the API call with the existing token anyway.
+                // If the token is truly expired the API will return 401 and we'll handle it.
+                // If refresh failed due to DNS/network, the API call will also fail but
+                // we'll show "Offline" instead of the misleading "Tap to sign in".
+            } else {
+                Log.d(TAG, "fetchUsage: refresh succeeded")
             }
-            Log.d(TAG, "fetchUsage: refresh succeeded")
         }
 
-        val token = tokenStore.accessToken ?: return UsageResult.AuthRequired
+        val token = tokenStore.accessToken
+        if (token == null) {
+            Log.d(TAG, "fetchUsage: no access token after refresh attempt")
+            return UsageResult.AuthRequired
+        }
 
         // Try without beta header first (feature may have graduated),
         // then retry with beta header if we get 403
