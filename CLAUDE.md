@@ -11,12 +11,15 @@ windows) with color-coded progress bars. OAuth login via Claude's own OAuth syst
 ## Project Status
 
 Phase 1 (Termux:Widget bash PoC) — **complete**, working in `~/projects/claude-widget/`
-Phase 2 (Native Android app) — **in progress**, OAuth working, widget not loading
+Phase 2 (Native Android app) — **in progress**, OAuth working, widget displays but no data
 
 **OAuth is fully working.** Sign-in, token exchange, and token storage all confirmed.
+**Widget placement is working.** "Can't add widget" blocker resolved — was caused by
+`setProgressTintList` crash (takes `ColorStateList`, not `int`) and R8 stripping classes.
 
-Current blocker: "Can't add widget" when trying to add to home screen. Likely an issue
-with the widget provider registration, layout, or AppWidgetProvider implementation.
+Current blocker: Usage API returning **HTTP 403** and intermittent DNS resolution failures.
+Widget displays but shows 0% and "Offline". Investigating whether `anthropic-beta` header
+value (`oauth-2025-04-20`) is outdated — now trying requests both with and without it.
 
 ---
 
@@ -190,7 +193,7 @@ implementation("com.google.android.material:material:1.11.0")
 ```
 GET https://api.anthropic.com/api/oauth/usage
 Authorization: Bearer <access_token>
-anthropic-beta: oauth-2025-04-20
+anthropic-beta: oauth-2025-04-20       ← may be outdated; app now tries without first
 ```
 
 Response:
@@ -202,6 +205,16 @@ Response:
 ```
 
 Rate limited aggressively — poll max once every 10 minutes, always cache.
+
+### Usage API Issues (in progress)
+- **HTTP 403**: Getting 403 from the usage endpoint. Possible causes:
+  - `anthropic-beta: oauth-2025-04-20` header outdated (extracted from CLI v2.1.83, ~1 year old)
+  - Token might lack required scope for this endpoint
+  - Endpoint URL may have changed
+- **DNS resolution failure**: Intermittent "unable to resolve host api.anthropic.com" —
+  likely the WorkManager worker firing before network is fully available
+- App now tries the request without the beta header first, then retries with it on 403
+- Widget shows actual error message for diagnosis (instead of generic "Offline")
 
 ---
 
@@ -224,11 +237,30 @@ Rate limited aggressively — poll max once every 10 minutes, always cache.
 
 ---
 
+## Resolved Issues
+
+1. **"Can't add widget" on home screen** — FIXED
+   - **Root cause:** `setInt(id, "setProgressTintList", color)` in `updateWidgets` crashed
+     because `setProgressTintList` expects `ColorStateList`, not `int`. The crash happened
+     when the worker updated the widget right after placement, killing it.
+   - **Also fixed:** Disabled R8 minification (`isMinifyEnabled = false`) to prevent
+     stripping of `AppWidgetProvider` and other classes
+   - Progress bars now use static tint from XML layout (dynamic coloring TBD)
+
+2. **"Can't add widget" — APK signing** — investigated but NOT the cause
+   - Added release signing config via GitHub Actions secrets
+   - Unsigned debug APKs can still host widgets; signing wasn't the blocker
+
 ## Known Issues / Next Steps
 
-1. **"Can't add widget" on home screen** — current blocker. Investigate:
-   - Widget provider registration in AndroidManifest.xml
-   - `appwidget_info.xml` configuration
-   - `ClaudeUsageWidget` AppWidgetProvider implementation
-   - Widget layout compatibility with RemoteViews
-   - Possible missing preview image or initial layout
+1. **Usage API returning HTTP 403** — current blocker
+   - Widget displays but shows 0% / Offline
+   - `anthropic-beta: oauth-2025-04-20` may be outdated
+   - App now tries without beta header first, retries with it on 403
+   - Widget shows actual error text for diagnosis
+2. **Dynamic progress bar coloring removed** — bars are static green
+   - Need RemoteViews-compatible approach (can't use `setProgressTintList` via `setInt`)
+3. **Re-enable R8 with proper keep rules** — once everything works
+4. **Token persistence across reinstalls** — tokens in EncryptedSharedPreferences survive
+   uninstall/reinstall on the same package name. Debug (`.debug` suffix) and release are
+   separate apps with separate token storage.
