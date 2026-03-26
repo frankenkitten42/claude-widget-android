@@ -14,8 +14,11 @@ import com.frankenkitten42.claudewidget.api.UsageResult
 import com.frankenkitten42.claudewidget.auth.OAuthManager
 import com.frankenkitten42.claudewidget.auth.TokenStore
 import com.frankenkitten42.claudewidget.worker.UsageFetchWorker
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.Request
 
 /**
  * Entry point. Handles sign-in via Chrome Custom Tab + manual code paste.
@@ -131,17 +134,29 @@ class AuthActivity : AppCompatActivity() {
                 }
                 diag.appendLine()
 
-                diag.appendLine("=== API Fetch ===")
-                val usageApi = UsageApi(tokenStore, oauthManager, httpClient)
-                when (val result = usageApi.fetchUsage()) {
-                    is UsageResult.Success -> {
-                        diag.appendLine("SUCCESS!")
-                        diag.appendLine("5hr: ${result.data.fiveHour.utilization}%")
-                        diag.appendLine("7day: ${result.data.sevenDay.utilization}%")
+                diag.appendLine("=== Raw API Call ===")
+                val token = tokenStore.accessToken
+                if (token != null) {
+                    try {
+                        val rawResult = withContext(Dispatchers.IO) {
+                            val req = Request.Builder()
+                                .url(UsageApi.USAGE_URL)
+                                .header("Accept", "application/json")
+                                .header("User-Agent", "claude-code/2.1.83")
+                                .header("Authorization", "Bearer $token")
+                                .header("anthropic-beta", OAuthManager.OAUTH_BETA)
+                                .build()
+                            httpClient.newCall(req).execute().use { resp ->
+                                val body = resp.body?.string() ?: ""
+                                "HTTP ${resp.code}\n$body"
+                            }
+                        }
+                        diag.appendLine(rawResult)
+                    } catch (e: Exception) {
+                        diag.appendLine("EXCEPTION: ${e.message}")
                     }
-                    is UsageResult.RateLimited -> diag.appendLine("RATE LIMITED (429)")
-                    is UsageResult.AuthRequired -> diag.appendLine("AUTH REQUIRED (token cleared)")
-                    is UsageResult.Error -> diag.appendLine("ERROR: ${result.message}")
+                } else {
+                    diag.appendLine("No token available")
                 }
 
                 debugText.text = diag.toString()
