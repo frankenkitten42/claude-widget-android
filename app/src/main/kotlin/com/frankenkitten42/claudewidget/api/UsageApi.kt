@@ -37,76 +37,63 @@ class UsageApi(
     private val httpClient: OkHttpClient
 ) {
     suspend fun fetchUsage(): UsageResult {
-        if (!tokenStore.isLoggedIn) {
+        // Save token before any refresh attempt — refresh failure (401) clears the store
+        val savedToken = tokenStore.accessToken
+        if (savedToken == null) {
             Log.d(TAG, "fetchUsage: not logged in")
             return UsageResult.AuthRequired
         }
 
         // Refresh token proactively if expiring soon
+        var refreshFailed = false
         if (tokenStore.isExpiredOrExpiring) {
             Log.d(TAG, "fetchUsage: token expired/expiring, refreshing...")
             val refreshResult = oauthManager.refreshTokens()
             if (refreshResult.isFailure) {
                 Log.e(TAG, "fetchUsage: refresh failed: ${refreshResult.exceptionOrNull()?.message}")
-                // Don't give up — try the API call with the existing token anyway.
-                // If the token is truly expired the API will return 401 and we'll handle it.
-                // If refresh failed due to DNS/network, the API call will also fail but
-                // we'll show "Offline" instead of the misleading "Tap to sign in".
+                refreshFailed = true
+                // Don't give up — try the API call with the saved token anyway.
             } else {
                 Log.d(TAG, "fetchUsage: refresh succeeded")
             }
         }
 
-        val token = tokenStore.accessToken
-        if (token == null) {
-            Log.d(TAG, "fetchUsage: no access token after refresh attempt")
-            return UsageResult.AuthRequired
-        }
+        // Use refreshed token if available, otherwise fall back to saved token
+        val token = tokenStore.accessToken ?: savedToken
 
-        // Try without beta header first (feature may have graduated),
-        // then retry with beta header if we get 403
-        for (useBeta in listOf(false, true)) {
-            val reqBuilder = Request.Builder()
-                .url(USAGE_URL)
-                .header("Accept", "application/json")
-                .header("User-Agent", "claude-widget/1.0")
-                .header("Authorization", "Bearer $token")
-            if (useBeta) {
-                reqBuilder.header("anthropic-beta", OAuthManager.OAUTH_BETA)
-            }
-            val request = reqBuilder.build()
+        val request = Request.Builder()
+            .url(USAGE_URL)
+            .header("Accept", "application/json")
+            .header("User-Agent", "claude-code/2.1.83")
+            .header("Authorization", "Bearer $token")
+            .header("anthropic-beta", OAuthManager.OAUTH_BETA)
+            .build()
 
-            Log.d(TAG, "fetchUsage: calling $USAGE_URL (beta=$useBeta)")
+        Log.d(TAG, "fetchUsage: calling $USAGE_URL")
 
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    httpClient.newCall(request).execute().use { response ->
-                        val body = response.body?.string() ?: ""
-                        Log.d(TAG, "fetchUsage: HTTP ${response.code} (beta=$useBeta), body=${body.take(300)}")
-                        when (response.code) {
-                            200 -> {
-                                val json = JSONObject(body)
-                                UsageResult.Success(parseUsageData(json))
-                            }
-                            429 -> UsageResult.RateLimited
-                            401 -> {
-                                tokenStore.clear()
-                                UsageResult.AuthRequired
-                            }
-                            403 -> null // will retry with/without beta
-                            else -> UsageResult.Error("HTTP ${response.code}: ${body.take(150)}")
+        return try {
+            withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    val body = response.body?.string() ?: ""
+                    Log.d(TAG, "fetchUsage: HTTP ${response.code}, body=${body.take(300)}")
+                    when (response.code) {
+                        200 -> {
+                            val json = JSONObject(body)
+                            UsageResult.Success(parseUsageData(json))
                         }
+                        429 -> UsageResult.RateLimited
+                        401 -> {
+                            tokenStore.clear()
+                            UsageResult.AuthRequired
+                        }
+                        else -> UsageResult.Error("HTTP ${response.code}: ${body.take(150)}")
                     }
                 }
-                if (result != null) return result
-                // 403 → try the other beta setting
-            } catch (e: Exception) {
-                Log.e(TAG, "fetchUsage: exception (beta=$useBeta)", e)
-                if (useBeta) return UsageResult.Error(e.message ?: "Network error")
-                // first attempt failed with exception → try with beta header
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchUsage: exception", e)
+            UsageResult.Error(e.message ?: "Network error")
         }
-        return UsageResult.Error("HTTP 403 on both attempts")
     }
 
     private fun parseUsageData(json: JSONObject): UsageData {

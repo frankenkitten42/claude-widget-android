@@ -9,6 +9,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.frankenkitten42.claudewidget.R
+import com.frankenkitten42.claudewidget.api.UsageApi
+import com.frankenkitten42.claudewidget.api.UsageResult
 import com.frankenkitten42.claudewidget.auth.OAuthManager
 import com.frankenkitten42.claudewidget.auth.TokenStore
 import com.frankenkitten42.claudewidget.worker.UsageFetchWorker
@@ -27,6 +29,7 @@ import okhttp3.OkHttpClient
  */
 class AuthActivity : AppCompatActivity() {
 
+    private lateinit var httpClient: OkHttpClient
     private lateinit var tokenStore: TokenStore
     private lateinit var oauthManager: OAuthManager
     private lateinit var statusText: TextView
@@ -35,12 +38,14 @@ class AuthActivity : AppCompatActivity() {
     private lateinit var codeInputLayout: LinearLayout
     private lateinit var codeInput: EditText
     private lateinit var submitCodeButton: Button
+    private lateinit var testFetchButton: Button
+    private lateinit var debugText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_auth)
 
-        val httpClient = OkHttpClient()
+        httpClient = OkHttpClient()
         tokenStore = TokenStore(this)
         oauthManager = OAuthManager(this, tokenStore, httpClient)
 
@@ -50,6 +55,8 @@ class AuthActivity : AppCompatActivity() {
         codeInputLayout = findViewById(R.id.layout_code_input)
         codeInput       = findViewById(R.id.et_auth_code)
         submitCodeButton = findViewById(R.id.btn_submit_code)
+        testFetchButton = findViewById(R.id.btn_test_fetch)
+        debugText       = findViewById(R.id.tv_debug)
 
         signInButton.setOnClickListener {
             setStatus("Opening Claude sign-in…\n\n1. Sign in and click Authorize\n2. Copy the code shown on the next page\n3. Come back here and paste it below")
@@ -94,11 +101,61 @@ class AuthActivity : AppCompatActivity() {
             updateUi()
         }
 
+        testFetchButton.setOnClickListener {
+            testFetchButton.isEnabled = false
+            debugText.visibility = View.VISIBLE
+            debugText.text = "Testing...\n"
+            lifecycleScope.launch {
+                val diag = StringBuilder()
+                diag.appendLine("=== Token State ===")
+                diag.appendLine("isLoggedIn: ${tokenStore.isLoggedIn}")
+                diag.appendLine("isExpired: ${tokenStore.isExpiredOrExpiring}")
+                diag.appendLine("expiresAt: ${tokenStore.expiresAt}")
+                diag.appendLine("now: ${System.currentTimeMillis()}")
+                val tokenPreview = tokenStore.accessToken?.take(20) ?: "null"
+                diag.appendLine("token: ${tokenPreview}...")
+                diag.appendLine()
+
+                diag.appendLine("=== Refresh Attempt ===")
+                if (tokenStore.isExpiredOrExpiring) {
+                    val refreshResult = oauthManager.refreshTokens()
+                    if (refreshResult.isSuccess) {
+                        diag.appendLine("Refresh: SUCCESS")
+                        diag.appendLine("new token: ${tokenStore.accessToken?.take(20)}...")
+                    } else {
+                        diag.appendLine("Refresh: FAILED")
+                        diag.appendLine("error: ${refreshResult.exceptionOrNull()?.message}")
+                    }
+                } else {
+                    diag.appendLine("Token still valid, skipping refresh")
+                }
+                diag.appendLine()
+
+                diag.appendLine("=== API Fetch ===")
+                val usageApi = UsageApi(tokenStore, oauthManager, httpClient)
+                when (val result = usageApi.fetchUsage()) {
+                    is UsageResult.Success -> {
+                        diag.appendLine("SUCCESS!")
+                        diag.appendLine("5hr: ${result.data.fiveHour.utilization}%")
+                        diag.appendLine("7day: ${result.data.sevenDay.utilization}%")
+                    }
+                    is UsageResult.RateLimited -> diag.appendLine("RATE LIMITED (429)")
+                    is UsageResult.AuthRequired -> diag.appendLine("AUTH REQUIRED (token cleared)")
+                    is UsageResult.Error -> diag.appendLine("ERROR: ${result.message}")
+                }
+
+                debugText.text = diag.toString()
+                testFetchButton.isEnabled = true
+                updateUi()
+            }
+        }
+
         updateUi()
     }
 
     override fun onResume() {
         super.onResume()
+        updateUi()
         // If user returned from Chrome without completing auth, re-enable button
         if (!tokenStore.isLoggedIn && !signInButton.isEnabled) {
             signInButton.isEnabled = true
@@ -110,6 +167,7 @@ class AuthActivity : AppCompatActivity() {
             statusText.text = "Signed in ✓\nWidget is active."
             signInButton.visibility = View.GONE
             signOutButton.visibility = View.VISIBLE
+            testFetchButton.visibility = View.VISIBLE
             codeInputLayout.visibility = View.GONE
         } else {
             if (codeInputLayout.visibility != View.VISIBLE) {
@@ -117,6 +175,7 @@ class AuthActivity : AppCompatActivity() {
             }
             signInButton.visibility = View.VISIBLE
             signOutButton.visibility = View.GONE
+            testFetchButton.visibility = View.GONE
         }
     }
 

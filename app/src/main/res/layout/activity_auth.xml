@@ -78,6 +78,28 @@
     </LinearLayout>
 
     <Button
+        android:id="@+id/btn_test_fetch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Test Fetch"
+        android:backgroundTint="#335577"
+        android:textColor="@color/text_primary"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:layout_marginTop="16dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tv_debug"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#AAAAAA"
+        android:textSize="11sp"
+        android:fontFamily="monospace"
+        android:paddingTop="12dp"
+        android:visibility="gone" />
+
+    <Button
         android:id="@+id/btn_sign_out"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
