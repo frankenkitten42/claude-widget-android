@@ -59,7 +59,8 @@ class ClaudeUsageWidget : AppWidgetProvider() {
             fiveHrResetsAt: String,
             sevenDayUtil: Double,
             sevenDayResetsAt: String,
-            isOffline: Boolean = false
+            isOffline: Boolean = false,
+            errorDetail: String? = null
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_claude_usage)
 
@@ -82,7 +83,7 @@ class ClaudeUsageWidget : AppWidgetProvider() {
 
             // Updated timestamp
             val updatedText = if (isOffline) {
-                "⚠ Offline"
+                if (errorDetail != null) "⚠ $errorDetail" else "⚠ Offline"
             } else {
                 "Updated: ${DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.systemDefault()).format(Instant.now())}"
             }

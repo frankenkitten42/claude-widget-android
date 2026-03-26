@@ -1,5 +1,6 @@
 package com.frankenkitten42.claudewidget.api
 
+import android.util.Log
 import com.frankenkitten42.claudewidget.auth.OAuthManager
 import com.frankenkitten42.claudewidget.auth.TokenStore
 import kotlinx.coroutines.Dispatchers
@@ -36,12 +37,20 @@ class UsageApi(
     private val httpClient: OkHttpClient
 ) {
     suspend fun fetchUsage(): UsageResult {
-        if (!tokenStore.isLoggedIn) return UsageResult.AuthRequired
+        if (!tokenStore.isLoggedIn) {
+            Log.d(TAG, "fetchUsage: not logged in")
+            return UsageResult.AuthRequired
+        }
 
         // Refresh token proactively if expiring soon
         if (tokenStore.isExpiredOrExpiring) {
+            Log.d(TAG, "fetchUsage: token expired/expiring, refreshing...")
             val refreshResult = oauthManager.refreshTokens()
-            if (refreshResult.isFailure) return UsageResult.AuthRequired
+            if (refreshResult.isFailure) {
+                Log.e(TAG, "fetchUsage: refresh failed: ${refreshResult.exceptionOrNull()?.message}")
+                return UsageResult.AuthRequired
+            }
+            Log.d(TAG, "fetchUsage: refresh succeeded")
         }
 
         val token = tokenStore.accessToken ?: return UsageResult.AuthRequired
@@ -55,12 +64,16 @@ class UsageApi(
             .header("anthropic-beta", OAuthManager.OAUTH_BETA)
             .build()
 
+        Log.d(TAG, "fetchUsage: calling $USAGE_URL")
+
         return try {
             withContext(Dispatchers.IO) {
                 httpClient.newCall(request).execute().use { response ->
+                    val body = response.body?.string() ?: ""
+                    Log.d(TAG, "fetchUsage: HTTP ${response.code}, body=${body.take(200)}")
                     when (response.code) {
                         200 -> {
-                            val json = JSONObject(response.body!!.string())
+                            val json = JSONObject(body)
                             UsageResult.Success(parseUsageData(json))
                         }
                         429 -> UsageResult.RateLimited
@@ -68,11 +81,12 @@ class UsageApi(
                             tokenStore.clear()
                             UsageResult.AuthRequired
                         }
-                        else -> UsageResult.Error("HTTP ${response.code}")
+                        else -> UsageResult.Error("HTTP ${response.code}: ${body.take(100)}")
                     }
                 }
             }
         } catch (e: Exception) {
+            Log.e(TAG, "fetchUsage: exception", e)
             UsageResult.Error(e.message ?: "Network error")
         }
     }
@@ -93,6 +107,7 @@ class UsageApi(
     }
 
     companion object {
+        private const val TAG = "UsageApi"
         const val USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
     }
 }
