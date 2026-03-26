@@ -74,30 +74,33 @@ class OAuthManager(
     suspend fun exchangeManualCode(code: String): Result<Unit> {
         val verifier = pendingCodeVerifier
             ?: return Result.failure(Exception("No pending auth flow — tap Sign In first"))
+        val state = pendingState
+            ?: return Result.failure(Exception("No pending state — tap Sign In first"))
 
         // Clear pending state
         pendingState = null
         pendingCodeVerifier = null
 
-        return exchangeCodeForTokens(code.trim(), verifier)
+        return exchangeCodeForTokens(code.trim(), verifier, state)
     }
 
     // -----------------------------------------------------------------------
     // Token exchange — JSON body, matching CLI behaviour
     // -----------------------------------------------------------------------
-    private suspend fun exchangeCodeForTokens(code: String, codeVerifier: String): Result<Unit> {
+    private suspend fun exchangeCodeForTokens(code: String, codeVerifier: String, state: String): Result<Unit> {
         val json = JSONObject().apply {
             put("grant_type", "authorization_code")
             put("code", code)
             put("redirect_uri", REDIRECT_URI)
             put("client_id", CLIENT_ID)
             put("code_verifier", codeVerifier)
+            put("state", state)
         }
 
         val request = Request.Builder()
             .url(TOKEN_URL)
             .post(json.toString().toRequestBody("application/json".toMediaType()))
-            .header("anthropic-beta", OAUTH_BETA)
+            .header("Content-Type", "application/json")
             .build()
 
         Log.d("OAuthManager", "Token exchange: code=${code.take(10)}..., redirect=$REDIRECT_URI")
@@ -138,7 +141,7 @@ class OAuthManager(
         val request = Request.Builder()
             .url(TOKEN_URL)
             .post(json.toString().toRequestBody("application/json".toMediaType()))
-            .header("anthropic-beta", OAUTH_BETA)
+            .header("Content-Type", "application/json")
             .build()
 
         return try {
