@@ -17,9 +17,10 @@ Phase 2 (Native Android app) — **in progress**, OAuth working, widget displays
 **Widget placement is working.** "Can't add widget" blocker resolved — was caused by
 `setProgressTintList` crash (takes `ColorStateList`, not `int`) and R8 stripping classes.
 
-Current blocker: Usage API returning **HTTP 403** and intermittent DNS resolution failures.
-Widget displays but shows 0% and "Offline". Investigating whether `anthropic-beta` header
-value (`oauth-2025-04-20`) is outdated — now trying requests both with and without it.
+Current blocker: Usage API was returning **HTTP 403** — diagnosed as User-Agent validation.
+Fix pushed (User-Agent changed to `claude-code/2.1.83`). Awaiting test by user.
+Also fixed: token being cleared before API attempt, misleading "Tap to sign in" on widget.
+New "Test Fetch" button in app for manual diagnostics.
 
 ---
 
@@ -206,15 +207,18 @@ Response:
 
 Rate limited aggressively — poll max once every 10 minutes, always cache.
 
-### Usage API Issues (in progress)
-- **HTTP 403**: Getting 403 from the usage endpoint. Possible causes:
-  - `anthropic-beta: oauth-2025-04-20` header outdated (extracted from CLI v2.1.83, ~1 year old)
-  - Token might lack required scope for this endpoint
-  - Endpoint URL may have changed
+### Usage API Issues (diagnosed, fix pushed)
+- **HTTP 403 root cause: User-Agent header**. The usage API validates the User-Agent string.
+  Our app was sending `User-Agent: claude-widget/1.0` → 403.
+  The bash PoC sends `User-Agent: claude-code/2.0.31` → 200.
+  **Fix:** Changed to `User-Agent: claude-code/2.1.83` to match the CLI.
+  The `anthropic-beta: oauth-2025-04-20` header IS still required.
 - **DNS resolution failure**: Intermittent "unable to resolve host api.anthropic.com" —
-  likely the WorkManager worker firing before network is fully available
-- App now tries the request without the beta header first, then retries with it on 403
+  WorkManager worker firing before network is fully available. Transient.
+- **"Tap to sign in" when actually signed in**: Refresh token 401 was clearing stored
+  tokens before the API call could be attempted. Fixed by saving token before refresh.
 - Widget shows actual error message for diagnosis (instead of generic "Offline")
+- **Test Fetch button** added to app for manual diagnostic output
 
 ---
 
@@ -253,11 +257,12 @@ Rate limited aggressively — poll max once every 10 minutes, always cache.
 
 ## Known Issues / Next Steps
 
-1. **Usage API returning HTTP 403** — current blocker
-   - Widget displays but shows 0% / Offline
-   - `anthropic-beta: oauth-2025-04-20` may be outdated
-   - App now tries without beta header first, retries with it on 403
-   - Widget shows actual error text for diagnosis
+1. **Usage API returning HTTP 403** — fix pushed, awaiting test
+   - Root cause: `User-Agent: claude-widget/1.0` rejected by API
+   - Fix: changed to `User-Agent: claude-code/2.1.83` (matching CLI)
+   - `anthropic-beta: oauth-2025-04-20` is still required
+   - Also fixed misleading "Tap to sign in" (token cleared before API attempt)
+   - User may need to **re-sign-in** if refresh token has expired
 2. **Dynamic progress bar coloring removed** — bars are static green
    - Need RemoteViews-compatible approach (can't use `setProgressTintList` via `setInt`)
 3. **Re-enable R8 with proper keep rules** — once everything works
