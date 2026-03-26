@@ -55,40 +55,50 @@ class UsageApi(
 
         val token = tokenStore.accessToken ?: return UsageResult.AuthRequired
 
-        val request = Request.Builder()
-            .url(USAGE_URL)
-            .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
-            .header("User-Agent", "claude-widget/1.0")
-            .header("Authorization", "Bearer $token")
-            .header("anthropic-beta", OAuthManager.OAUTH_BETA)
-            .build()
+        // Try without beta header first (feature may have graduated),
+        // then retry with beta header if we get 403
+        for (useBeta in listOf(false, true)) {
+            val reqBuilder = Request.Builder()
+                .url(USAGE_URL)
+                .header("Accept", "application/json")
+                .header("User-Agent", "claude-widget/1.0")
+                .header("Authorization", "Bearer $token")
+            if (useBeta) {
+                reqBuilder.header("anthropic-beta", OAuthManager.OAUTH_BETA)
+            }
+            val request = reqBuilder.build()
 
-        Log.d(TAG, "fetchUsage: calling $USAGE_URL")
+            Log.d(TAG, "fetchUsage: calling $USAGE_URL (beta=$useBeta)")
 
-        return try {
-            withContext(Dispatchers.IO) {
-                httpClient.newCall(request).execute().use { response ->
-                    val body = response.body?.string() ?: ""
-                    Log.d(TAG, "fetchUsage: HTTP ${response.code}, body=${body.take(200)}")
-                    when (response.code) {
-                        200 -> {
-                            val json = JSONObject(body)
-                            UsageResult.Success(parseUsageData(json))
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    httpClient.newCall(request).execute().use { response ->
+                        val body = response.body?.string() ?: ""
+                        Log.d(TAG, "fetchUsage: HTTP ${response.code} (beta=$useBeta), body=${body.take(300)}")
+                        when (response.code) {
+                            200 -> {
+                                val json = JSONObject(body)
+                                UsageResult.Success(parseUsageData(json))
+                            }
+                            429 -> UsageResult.RateLimited
+                            401 -> {
+                                tokenStore.clear()
+                                UsageResult.AuthRequired
+                            }
+                            403 -> null // will retry with/without beta
+                            else -> UsageResult.Error("HTTP ${response.code}: ${body.take(150)}")
                         }
-                        429 -> UsageResult.RateLimited
-                        401 -> {
-                            tokenStore.clear()
-                            UsageResult.AuthRequired
-                        }
-                        else -> UsageResult.Error("HTTP ${response.code}: ${body.take(100)}")
                     }
                 }
+                if (result != null) return result
+                // 403 → try the other beta setting
+            } catch (e: Exception) {
+                Log.e(TAG, "fetchUsage: exception (beta=$useBeta)", e)
+                if (useBeta) return UsageResult.Error(e.message ?: "Network error")
+                // first attempt failed with exception → try with beta header
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchUsage: exception", e)
-            UsageResult.Error(e.message ?: "Network error")
         }
+        return UsageResult.Error("HTTP 403 on both attempts")
     }
 
     private fun parseUsageData(json: JSONObject): UsageData {
