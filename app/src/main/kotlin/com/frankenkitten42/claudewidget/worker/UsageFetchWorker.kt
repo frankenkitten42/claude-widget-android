@@ -73,14 +73,14 @@ class UsageFetchWorker(
         private const val TAG = "UsageFetchWorker"
         private const val WORK_NAME = "claude_usage_fetch"
 
-        /** Schedule periodic file reads every 10 minutes. */
+        /** Schedule periodic file reads every 15 minutes (Android minimum). */
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<UsageFetchWorker>(10, TimeUnit.MINUTES)
+            val request = PeriodicWorkRequestBuilder<UsageFetchWorker>(15, TimeUnit.MINUTES)
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.REPLACE,
                 request
             )
         }
