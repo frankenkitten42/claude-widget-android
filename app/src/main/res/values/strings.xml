@@ -2,11 +2,6 @@
 <resources>
     <string name="app_name">Claude Widget</string>
     <string name="widget_description">Displays Claude usage for 5-hour and 7-day windows</string>
-    <string name="status_loading">Loading…</string>
-    <string name="status_offline">Offline</string>
     <string name="label_5hr">5hr</string>
     <string name="label_7day">7day</string>
-    <string name="label_resets">Resets:</string>
-    <string name="label_updated">Updated:</string>
-    <string name="label_available">Available</string>
 </resources>

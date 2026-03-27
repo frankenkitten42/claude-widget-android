@@ -4,11 +4,8 @@
     <color name="widget_bg">#CC1A1A2E</color>
     <color name="widget_border">#FF3A3A5C</color>
 
-    <!-- Usage level colors — match PoC thresholds -->
+    <!-- Usage level color (static tint for progress bars) -->
     <color name="usage_green">#4CAF50</color>
-    <color name="usage_yellow">#FFC107</color>
-    <color name="usage_red">#F44336</color>
-    <color name="usage_critical">#B71C1C</color>
 
     <!-- Text colors -->
     <color name="text_primary">#FFFFFFFF</color>
